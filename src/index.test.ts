@@ -11,7 +11,7 @@ import {
   indexNotes,
   OnDeviceEmbeddingFunction,
   searchAndCombineResults,
-} from "./index";
+} from "../src/index";
 
 describe("Apple Notes Indexing", async () => {
   const db = await lancedb.connect(

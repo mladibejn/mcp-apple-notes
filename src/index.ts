@@ -53,6 +53,18 @@ export class OnDeviceEmbeddingFunction extends EmbeddingFunction<string> {
   }
 }
 
+const log = (method: string, params: Record<string, unknown>) => {
+  console.error(JSON.stringify({
+    jsonrpc: "2.0",
+    method: "progress",
+    params: {
+      timestamp: new Date().toISOString(),
+      method,
+      ...params
+    }
+  }));
+};
+
 const func = new OnDeviceEmbeddingFunction();
 
 const notesTableSchema = LanceSchema({
@@ -145,15 +157,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 const getNotes = async () => {
-  const notes = await runJxa(`
-    const app = Application('Notes');
-app.includeStandardAdditions = true;
-const notes = Array.from(app.notes());
-const titles = notes.map(note => note.properties().name);
-return titles;
-  `);
+  const getNotesChunk = async (offset: number, limit: number) => {
+    return await runJxa(`
+      const app = Application('Notes');
+      app.includeStandardAdditions = true;
+      const notes = Array.from(app.notes());
+      const chunk = notes.slice(${offset}, ${offset + limit});
+      const titles = chunk.map(note => note.name());
+      return titles;
+    `);
+  };
 
-  return notes as string[];
+  const CHUNK_SIZE = 500;
+  let allNotes: string[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    log("get-notes.progress", {
+      status: "processing",
+      message: `Fetching notes chunk starting at offset ${offset}`,
+      currentOffset: offset
+    });
+
+    const chunk = await getNotesChunk(offset, CHUNK_SIZE);
+    allNotes = [...allNotes, ...(chunk as string[])];
+
+    if ((chunk as string[]).length < CHUNK_SIZE) {
+      hasMore = false;
+    } else {
+      offset += CHUNK_SIZE;
+    }
+  }
+
+  log("get-notes.progress", {
+    status: "completed",
+    message: "Notes fetched successfully",
+    notes: allNotes.length
+  });
+
+  return allNotes;
 };
 
 const getNoteDetailsByTitle = async (title: string) => {
@@ -163,12 +206,15 @@ const getNoteDetailsByTitle = async (title: string) => {
     
     try {
         const note = app.notes.whose({name: title})[0];
+        if (!note) {
+            return "{}";
+        }
         
         const noteInfo = {
-            title: note.name(),
-            content: note.body(),
-            creation_date: note.creationDate().toLocaleString(),
-            modification_date: note.modificationDate().toLocaleString()
+            title: note?.name() || "",
+            content: note?.body() || "",
+            creation_date: note?.creationDate()?.toLocaleString() || "",
+            modification_date: note?.modificationDate()?.toLocaleString() || ""
         };
         
         return JSON.stringify(noteInfo);
@@ -185,49 +231,145 @@ const getNoteDetailsByTitle = async (title: string) => {
   };
 };
 
+interface NoteChunk {
+  id: string;
+  title: string;
+  content: string;
+  creation_date: string;
+  modification_date: string;
+}
+
 export const indexNotes = async (notesTable: any) => {
   const start = performance.now();
   let report = "";
-  const allNotes = (await getNotes()) || [];
-  const notesDetails = await Promise.all(
-    allNotes.map((note) => {
+  let allNotes: string[] = [];
+  let allChunks: NoteChunk[] = [];
+  let processedChunks = 0;
+
+  try {
+    // Get all notes
+    allNotes = (await getNotes()) || [];
+    const CHUNK_SIZE = 100;
+    const totalChunks = Math.ceil(allNotes.length / CHUNK_SIZE);
+
+    // Send initial progress
+    log("index-notes.progress", {
+      status: "starting",
+      message: `Starting to process ${allNotes.length} notes in ${totalChunks} chunks`,
+      total: allNotes.length,
+      chunkSize: CHUNK_SIZE
+    });
+
+    // Process notes in chunks
+    for (let i = 0; i < allNotes.length; i += CHUNK_SIZE) {
       try {
-        return getNoteDetailsByTitle(note);
+        const currentChunk = allNotes.slice(i, i + CHUNK_SIZE);
+
+        // Send chunk progress
+        log("index-notes.progress", {
+          status: "processing",
+          message: `Processing chunk ${processedChunks + 1} of ${totalChunks}`,
+          currentChunk: processedChunks + 1,
+          totalChunks,
+          notesInChunk: currentChunk.length
+        });
+
+        // Process current chunk
+        const notesDetails = await Promise.all(
+          currentChunk.map((note) => {
+            try {
+              return getNoteDetailsByTitle(note);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              report += `Error getting note details for ${note}: ${errorMessage}\n`;
+              log("index-notes.error", {
+                status: "error",
+                message: `Failed to get note details for ${note}`,
+                error: errorMessage
+              });
+              return null;
+            }
+          })
+        );
+
+        const chunkResults: NoteChunk[] = notesDetails
+          .filter((n): n is NonNullable<typeof n> => n !== null)
+          .map((node) => {
+            try {
+              return {
+                ...node,
+                content: turndown(node?.content || ""),
+              };
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              report += `Error processing note ${node?.title}: ${errorMessage}\n`;
+              log("index-notes.error", {
+                status: "error",
+                message: `Failed to process note ${node?.title}`,
+                error: errorMessage,
+                node,
+              });
+              return node;
+            }
+          })
+          .filter((note) => note !== null)
+          .map((note, index) => ({
+            id: `${i + index}`,
+            title: note.title,
+            content: note.content,
+            creation_date: note.creation_date,
+            modification_date: note.modification_date,
+          }));
+
+        // Add current chunk to database
+        // await notesTable.add(chunkResults);
+        allChunks = [...allChunks, ...chunkResults];
+        processedChunks++;
+
+        // Send chunk completion progress
+        log("index-notes.progress", {
+          status: "chunk-complete",
+          message: `Completed chunk ${processedChunks} of ${totalChunks}`,
+          currentChunk: processedChunks,
+          totalChunks,
+          notesProcessed: allChunks.length
+        });
       } catch (error) {
-        report += `Error getting note details for ${note}: ${error.message}\n`;
-        return {} as any;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        report += `Error processing chunk ${processedChunks + 1}: ${errorMessage}\n`;
+        log("index-notes.error", {
+          status: "error",
+          message: `Failed to process chunk ${processedChunks + 1}`,
+          error: errorMessage
+        });
+        // Continue with next chunk
+        processedChunks++;
       }
-    })
-  );
+    }
 
-  const chunks = notesDetails
-    .filter((n) => n.title)
-    .map((node) => {
-      try {
-        return {
-          ...node,
-          content: turndown(node.content || ""), // this sometimes fails
-        };
-      } catch (error) {
-        return node;
-      }
-    })
-    .map((note, index) => ({
-      id: index.toString(),
-      title: note.title,
-      content: note.content, // turndown(note.content || ""),
-      creation_date: note.creation_date,
-      modification_date: note.modification_date,
-    }));
+    // Send final progress
+    log("index-notes.progress", {
+      status: "completed",
+      message: "All chunks processed successfully",
+      totalProcessed: allChunks.length,
+      time: performance.now() - start
+    });
 
-  await notesTable.add(chunks);
-
-  return {
-    chunks: chunks.length,
-    report,
-    allNotes: allNotes.length,
-    time: performance.now() - start,
-  };
+    return {
+      chunks: allChunks.length,
+      report,
+      allNotes: allNotes.length,
+      time: performance.now() - start,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    log("index-notes.error", {
+      status: "fatal",
+      message: "Fatal error during indexing",
+      error: errorMessage
+    });
+    throw new Error(`Failed to index notes: ${errorMessage}`);
+  }
 };
 
 export const createNotesTable = async (overrideName?: string) => {
@@ -278,42 +420,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request, c) => {
   const { name, arguments: args } = request.params;
 
   try {
-    if (name === "create-note") {
-      const { title, content } = CreateNoteSchema.parse(args);
-      await createNote(title, content);
-      return createTextResponse(`Created note "${title}" successfully.`);
-    } else if (name === "list-notes") {
-      return createTextResponse(
-        `There are ${await notesTable.countRows()} notes in your Apple Notes database.`
-      );
-    } else if (name == "get-note") {
-      try {
+    switch (name) {
+      case "create-note": {
+        const { title, content } = CreateNoteSchema.parse(args);
+        await createNote(title, content);
+        return createTextResponse(`Created note "${title}" successfully.`);
+      }
+      case "list-notes":
+        return createTextResponse(`There are ${await notesTable.countRows()} notes in your Apple Notes database.`);
+      case "get-note": {
         const { title } = GetNoteSchema.parse(args);
         const note = await getNoteDetailsByTitle(title);
-
-        return createTextResponse(`${note}`);
-      } catch (error) {
-        return createTextResponse(error.message);
+        return createTextResponse(JSON.stringify(note));
       }
-    } else if (name === "index-notes") {
-      const { time, chunks, report, allNotes } = await indexNotes(notesTable);
-      return createTextResponse(
-        `Indexed ${chunks} notes chunks in ${time}ms. You can now search for them using the "search-notes" tool.`
-      );
-    } else if (name === "search-notes") {
-      const { query } = QueryNotesSchema.parse(args);
-      const combinedResults = await searchAndCombineResults(notesTable, query);
-      return createTextResponse(JSON.stringify(combinedResults));
-    } else {
-      throw new Error(`Unknown tool: ${name}`);
+      case "index-notes": {
+        const { time, chunks } = await indexNotes(notesTable);
+        return createTextResponse(`Indexed ${chunks} notes in ${time}ms. You can now search for them using the "search-notes" tool.`);
+      }
+      case "search-notes": {
+        const { query } = QueryNotesSchema.parse(args);
+        const results = await searchAndCombineResults(notesTable, query);
+        return createTextResponse(JSON.stringify(results));
+      }
+      default:
+        throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(
-        `Invalid arguments: ${error.errors
-          .map((e) => `${e.path.join(".")}: ${e.message}`)
-          .join(", ")}`
-      );
+      throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
     }
     throw error;
   }

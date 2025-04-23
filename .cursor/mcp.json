@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "apple-notes-mcp": {
+            "command": "bunx",
+            "args": [
+                "tsx",
+                "./src/index.ts"
+            ],
+            "info": {
+                "name": "apple-notes-mcp",
+                "version": "1.0.0",
+                "description": "Apple Notes MCP Server"
+            }
+        }
+    }
+}
