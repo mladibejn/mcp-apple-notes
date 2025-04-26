@@ -20,6 +20,7 @@ import { pipeline } from "@huggingface/transformers";
 import { ensureDirectory } from "./utils/directory.js";
 import { writeJSON } from "./utils/json.js";
 import { DIRECTORIES } from "./config.js";
+import type { Table, Data, AddDataOptions } from "@lancedb/lancedb";
 
 const { turndown } = new TurndownService();
 const db = await lancedb.connect(
@@ -244,11 +245,14 @@ interface NoteChunk {
   attachments?: string[];
 }
 
-interface NotesTable {
-  add: (notes: NoteChunk[]) => Promise<void>;
+// Make NoteChunk compatible with Record<string, unknown>
+type NoteData = NoteChunk & Record<string, unknown>;
+
+interface NotesTable extends Table {
+  add(data: NoteData[], options?: Partial<AddDataOptions>): Promise<void>;
 }
 
-export const indexNotes = async (notesTable: NotesTable) => {
+export const indexNotes = async (notesTable: Table) => {
   const start = performance.now();
   let report = "";
   let allNotes: string[] = [];
@@ -304,7 +308,7 @@ export const indexNotes = async (notesTable: NotesTable) => {
           })
         );
 
-        const chunkResults: NoteChunk[] = notesDetails
+        const chunkResults: NoteData[] = notesDetails
           .filter((n): n is NonNullable<typeof n> => n !== null)
           .map((node) => {
             try {
@@ -331,7 +335,7 @@ export const indexNotes = async (notesTable: NotesTable) => {
             content: note.content,
             creation_date: note.creation_date,
             modification_date: note.modification_date,
-          }));
+          } as NoteData));
 
         // Save each note to a file in the raw directory
         await Promise.all(
@@ -522,7 +526,7 @@ export const searchAndCombineResults = async (
   const k = 60;
   const scores = new Map<string, number>();
 
-  const processResults = (results: NoteChunk[], startRank: number) => {
+  const processResults = (results: NoteData[], startRank: number) => {
     results.forEach((result, idx) => {
       const key = `${result.title}::${result.content}`;
       const score = 1 / (k + startRank + idx);
