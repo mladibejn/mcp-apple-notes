@@ -1,4 +1,5 @@
-import type { CheckpointManager, ProcessingStage, StageStatus } from './checkpoint';
+import { CheckpointManager, ProcessingStage, StageStatus } from './checkpoint';
+import type { StageProgress } from './checkpoint';
 
 /**
  * Format a duration in milliseconds to a human-readable string
@@ -131,4 +132,4 @@ export function getStageProgressString(checkpointManager: CheckpointManager, sta
     }
 
     return `${stage}: ${status} - ${processed}/${total} processed (${percent.toFixed(1)}%) ${failed > 0 ? `[${failed} failed]` : ''}`;
-} 
+}

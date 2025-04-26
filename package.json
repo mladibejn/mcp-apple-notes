@@ -7,12 +7,15 @@
   "description": "",
   "keywords": [],
   "license": "ISC",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node",
-    "start": "bunx tsx src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "start": "bun run src/index.ts",
+    "typecheck": "bun x tsc --noEmit",
     "purge-db": "rm -rf ~/.mcp-apple-notes",
-    "test": "bunx tsx src/index.test.ts"
+    "test": "bun test src/index.test.ts"
   },
   "exports": {
     ".": "./src/index.ts"
@@ -23,6 +26,7 @@
     "@lancedb/lancedb": "^0.14.0",
     "@langchain/textsplitters": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.0.3",
+    "openai": "^4.96.0",
     "run-jxa": "^3.0.0",
     "turndown": "^7.2.0",
     "zod": "^3.24.1"

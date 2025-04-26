@@ -118,7 +118,7 @@ export class CheckpointManager {
             throw new Error('Checkpoint metadata not initialized');
         }
         this.metadata.lastUpdated = new Date().toISOString();
-        await writeJSON(CHECKPOINT_CONFIG.FULL_PATH, this.metadata);
+        await writeJSON(CHECKPOINT_CONFIG.FULL_PATH, JSON.parse(JSON.stringify(this.metadata)));
     }
 
     /**

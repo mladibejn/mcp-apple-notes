@@ -21,7 +21,7 @@ import { ensureDirectory } from "./utils/directory.js";
 import { writeJSON } from "./utils/json.js";
 import { DIRECTORIES } from "./config.js";
 import type { Table, Data, AddDataOptions } from "@lancedb/lancedb";
-import { CheckpointManager, ProcessingStage, ProcessingStatus } from './utils/checkpoint';
+import { CheckpointManager, ProcessingStage } from './utils/checkpoint';
 
 const { turndown } = new TurndownService();
 const db = await lancedb.connect(
@@ -262,7 +262,7 @@ export const indexNotes = async (notesTable: Table) => {
 
   // Initialize checkpoint manager
   const checkpointManager = new CheckpointManager();
-  await checkpointManager.initialize();
+  await checkpointManager.initialize(allNotes.length);
 
   try {
     // Ensure raw directory exists
@@ -274,9 +274,9 @@ export const indexNotes = async (notesTable: Table) => {
     const totalChunks = Math.ceil(allNotes.length / CHUNK_SIZE);
 
     // Initialize or resume checkpoint
-    await checkpointManager.startStage(ProcessingStage.RAW_EXPORT, allNotes.length);
-    const lastProcessedNote = await checkpointManager.getNextNote();
-    const startIndex = lastProcessedNote ? Number.parseInt(lastProcessedNote.id) + 1 : 0;
+    await checkpointManager.startStage(ProcessingStage.RAW_EXPORT);
+    const nextNoteId = checkpointManager.getNextNoteForStage(ProcessingStage.RAW_EXPORT);
+    const startIndex = nextNoteId ? Number.parseInt(nextNoteId) + 1 : 0;
 
     // Send initial progress
     log("index-notes.progress", {
@@ -355,7 +355,7 @@ export const indexNotes = async (notesTable: Table) => {
               const filename = `note-${note.id}.json`;
               await writeJSON(note, path.join(DIRECTORIES.RAW, filename));
               // Update checkpoint for each note
-              await checkpointManager.updateNoteProgress(note.id, note.title);
+              await checkpointManager.updateNoteProgress(ProcessingStage.RAW_EXPORT, note.id, true);
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               report += `Error saving note ${note.id} to file: ${errorMessage}\n`;
@@ -374,7 +374,7 @@ export const indexNotes = async (notesTable: Table) => {
         processedChunks++;
 
         // Send chunk completion progress with checkpoint info
-        const progress = await checkpointManager.getProgress();
+        const progress = await checkpointManager.getStageProgress(ProcessingStage.RAW_EXPORT);
         log("index-notes.progress", {
           status: "chunk-complete",
           message: `Completed chunk ${processedChunks} of ${totalChunks}`,
@@ -401,7 +401,7 @@ export const indexNotes = async (notesTable: Table) => {
     await checkpointManager.completeStage(ProcessingStage.RAW_EXPORT);
 
     // Send final progress
-    const finalProgress = await checkpointManager.getProgress();
+    const finalProgress = await checkpointManager.getStageProgress(ProcessingStage.RAW_EXPORT);
     log("index-notes.progress", {
       status: "completed",
       message: "All chunks processed and saved successfully",
