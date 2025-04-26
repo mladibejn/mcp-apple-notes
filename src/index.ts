@@ -17,6 +17,9 @@ import {
 } from "@lancedb/lancedb/embedding";
 import { type Float, Float32, Utf8 } from "apache-arrow";
 import { pipeline } from "@huggingface/transformers";
+import { ensureDirectory } from "./utils/directory.js";
+import { writeJSON } from "./utils/json.js";
+import { DIRECTORIES } from "./config.js";
 
 const { turndown } = new TurndownService();
 const db = await lancedb.connect(
@@ -237,9 +240,15 @@ interface NoteChunk {
   content: string;
   creation_date: string;
   modification_date: string;
+  folder?: string;
+  attachments?: string[];
 }
 
-export const indexNotes = async (notesTable: any) => {
+interface NotesTable {
+  add: (notes: NoteChunk[]) => Promise<void>;
+}
+
+export const indexNotes = async (notesTable: NotesTable) => {
   const start = performance.now();
   let report = "";
   let allNotes: string[] = [];
@@ -247,6 +256,9 @@ export const indexNotes = async (notesTable: any) => {
   let processedChunks = 0;
 
   try {
+    // Ensure raw directory exists
+    await ensureDirectory(DIRECTORIES.RAW);
+
     // Get all notes
     allNotes = (await getNotes()) || [];
     const CHUNK_SIZE = 100;
@@ -321,8 +333,26 @@ export const indexNotes = async (notesTable: any) => {
             modification_date: note.modification_date,
           }));
 
+        // Save each note to a file in the raw directory
+        await Promise.all(
+          chunkResults.map(async (note) => {
+            try {
+              const filename = `note-${note.id}.json`;
+              await writeJSON(note, path.join(DIRECTORIES.RAW, filename));
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              report += `Error saving note ${note.id} to file: ${errorMessage}\n`;
+              log("index-notes.error", {
+                status: "error",
+                message: `Failed to save note ${note.id} to file`,
+                error: errorMessage
+              });
+            }
+          })
+        );
+
         // Add current chunk to database
-        // await notesTable.add(chunkResults);
+        await notesTable.add(chunkResults);
         allChunks = [...allChunks, ...chunkResults];
         processedChunks++;
 
@@ -332,7 +362,8 @@ export const indexNotes = async (notesTable: any) => {
           message: `Completed chunk ${processedChunks} of ${totalChunks}`,
           currentChunk: processedChunks,
           totalChunks,
-          notesProcessed: allChunks.length
+          notesProcessed: allChunks.length,
+          notesSaved: allChunks.length
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -350,7 +381,7 @@ export const indexNotes = async (notesTable: any) => {
     // Send final progress
     log("index-notes.progress", {
       status: "completed",
-      message: "All chunks processed successfully",
+      message: "All chunks processed and saved successfully",
       totalProcessed: allChunks.length,
       time: performance.now() - start
     });
@@ -491,7 +522,7 @@ export const searchAndCombineResults = async (
   const k = 60;
   const scores = new Map<string, number>();
 
-  const processResults = (results: any[], startRank: number) => {
+  const processResults = (results: NoteChunk[], startRank: number) => {
     results.forEach((result, idx) => {
       const key = `${result.title}::${result.content}`;
       const score = 1 / (k + startRank + idx);
