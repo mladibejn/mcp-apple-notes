@@ -1,0 +1,198 @@
+# 🧠 Masterplan: Intelligent Structuring, Enrichment, and Organization of Personal Notes
+
+## Current Implementation Analysis
+
+The existing system provides basic note export and storage capabilities:
+
+1. Note Export (Implemented):
+   - getNoteDetailsByTitle function for fetching individual notes
+   - Batch processing in chunks of 100 notes
+   - Basic error handling and progress logging
+   - HTML to Markdown conversion
+   - Direct storage in LanceDB
+
+2. Integration Points:
+   - indexNotes function in src/index.ts is the main entry point
+   - Progress reporting via MCP protocol
+   - Error handling and chunking logic
+
+## Required Extensions
+
+### 1. Data Pipeline Structure
+Create a structured pipeline with clear stages:
+- /data/raw/ - Raw exported notes
+- /data/enriched/ - Notes with summaries and tags
+- /data/clusters/ - Clustering results
+- /data/final/ - Final merged dataset
+
+### 2. Processing Steps
+Modify indexNotes to:
+1. Export and save raw notes to files
+2. Process each note through enrichment pipeline
+3. Generate clusters and aggregate metadata
+4. Create final merged output
+
+### 3. Note Enrichment
+For each note:
+- Generate summary using OpenAI
+- Extract relevant tags
+- Create embeddings
+- Save enriched data to files
+
+### 4. Clustering and Organization
+- Aggregate all tags into a single file
+- Cluster notes based on embeddings
+- Save cluster assignments
+- Generate final merged dataset
+
+## Technical Requirements
+
+### 1. File Structure
+```
+/data
+  /raw
+    - note-{id}.json (Raw notes)
+  /enriched
+    - note-{id}.json (With summaries/tags)
+  /clusters
+    - clusters.json (Cluster assignments)
+    - tags_aggregated.json (Tag metadata)
+  /final
+    - notes_final.json (Complete dataset)
+```
+
+### 2. Data Formats
+
+Raw Note Format:
+```json
+{
+  "id": "string",
+  "title": "string",
+  "content": "string",
+  "creation_date": "string",
+  "modification_date": "string"
+}
+```
+
+Enriched Note Format:
+```json
+{
+  "id": "string",
+  "title": "string",
+  "content": "string",
+  "creation_date": "string",
+  "modification_date": "string",
+  "summary": "string",
+  "tags": ["string"],
+  "embedding": [number]
+}
+```
+
+Final Note Format:
+```json
+{
+  "id": "string",
+  "title": "string",
+  "content": "string",
+  "creation_date": "string",
+  "modification_date": "string",
+  "summary": "string",
+  "tags": ["string"],
+  "embedding": [number],
+  "cluster": "string"
+}
+```
+
+### 3. Processing Requirements
+
+1. Resilient Processing:
+   - Save progress after each major step
+   - Handle errors gracefully
+   - Support resuming from last checkpoint
+   - Maintain progress logs
+
+2. OpenAI Integration:
+   - Use gpt-4 or gpt-3.5-turbo for summaries/tags
+   - Use text-embedding-ada-002 for embeddings
+   - Implement rate limiting and retries
+
+3. Clustering:
+   - Use KMeans or HDBSCAN
+   - Save cluster assignments
+   - Generate metadata about clusters
+
+## Implementation Phases
+
+### Phase 1: Pipeline Setup
+- Modify indexNotes to save raw notes
+- Create directory structure
+- Implement file saving utilities
+
+### Phase 2: Enrichment Pipeline
+- Implement OpenAI integration
+- Create enrichment processing
+- Save enriched notes
+
+### Phase 3: Clustering
+- Implement clustering logic
+- Generate aggregated metadata
+- Create final merged dataset
+
+### Phase 4: Testing & Optimization
+- Test with large note sets
+- Optimize processing speed
+- Implement error recovery
+
+## Success Criteria
+1. All notes successfully exported and saved
+2. Enrichment pipeline working reliably
+3. Clustering provides meaningful groups
+4. Final dataset is complete and well-structured
+
+# Apple Notes MCP Integration PRD
+
+## Overview
+Create a Model Context Protocol (MCP) integration for Apple Notes that allows AI agents to interact with Apple Notes through a standardized interface.
+
+## Core Requirements
+
+### Note Management
+- List all Apple Notes
+- Get note content by title
+- Create new notes with HTML content
+- Search notes by content or title
+- Index notes for semantic search
+
+### Technical Requirements
+- Use JXA (JavaScript for Automation) for Apple Notes interaction
+- Implement semantic search capabilities using LangChain and vector databases
+- Handle HTML/Markdown conversion for note content
+- Ensure proper error handling and validation
+- Support asynchronous operations
+
+### Integration Requirements
+- Follow MCP standards for tool definitions
+- Provide clear documentation for each tool
+- Implement proper type definitions
+- Handle rate limiting and performance considerations
+
+## Success Criteria
+- All CRUD operations work reliably with Apple Notes
+- Semantic search provides accurate results
+- Tools are properly integrated with MCP
+- Error handling covers edge cases
+- Documentation is complete and clear
+
+## Technical Stack
+- Bun.js for runtime
+- TypeScript for type safety
+- LanceDB for vector storage
+- Turndown for HTML/Markdown conversion
+- Zod for validation
+- JXA for Apple Notes automation
+
+## Constraints
+- Must work on macOS only (Apple Notes requirement)
+- Handle large note collections efficiently
+- Respect user's privacy and data security
+- Follow Apple's automation guidelines 

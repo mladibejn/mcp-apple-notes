@@ -228,7 +228,7 @@ Once a task has been broken down into subtasks using `expand_task` or similar me
 
 ## Task Completion and Git Commits
 
-After completing a task and marking it as done using `set_task_status`, the AI will suggest a conventional commit message following these guidelines:
+After completing a task and marking it as done using `set_task_status`, the AI will suggest a conventional commit message that follows these guidelines:
 
 1. Format: `type(scope): description`
    - Type: feat, fix, docs, style, refactor, perf, test, chore
@@ -255,17 +255,47 @@ After completing a task and marking it as done using `set_task_status`, the AI w
    - perf: Performance improvements
    - chore: Maintenance tasks, dependencies, etc.
 
-4. Best practices for reviewing suggested messages:
-   - Verify the type matches the nature of the changes
-   - Ensure the scope accurately identifies the affected area
-   - Confirm the description is clear and concise
-   - Check that all significant changes are listed in the body
-   - Make any necessary adjustments before committing
+4. Best practices for suggested messages:
+   - Type should match the nature of the changes
+   - Scope should accurately identify the affected area
+   - Description should be clear and concise
+   - Body should list all significant changes
+   - All text should be in present tense
 
-5. After reviewing and approving the suggested message:
-   - Stage your changes: `git add .`
-   - Create the commit with your approved message
-   - If needed, create a changeset and make a separate commit
+5. The AI will provide ONLY the suggested commit message
+   - It will not perform any git operations
+   - It will not stage files (`git add`)
+   - It will not create commits (`git commit`)
+   - The user is responsible for all git operations
+   - The user may modify the suggested message as needed
+
+6. Message components:
+   - First line: Summary in the format `type(scope): description`
+   - Blank line
+   - Bullet points listing significant changes
+   - Each bullet starts with "- " and uses present tense
+   - Focus on what the change does, not how it was done
+
+7. When to suggest messages:
+   - After marking a task as done
+   - After completing a significant feature
+   - After fixing a bug
+   - After major refactoring
+   - When the user requests a commit message
+
+8. Message quality checklist:
+   - Follows conventional commit format
+   - Uses correct type for changes made
+   - Has appropriate scope
+   - Lists all significant changes
+   - Uses clear, concise language
+   - Maintains present tense throughout
+   - Provides enough detail for understanding
+   - Avoids implementation details
+   - Focuses on what changed, not why
+
+---
+*The user is responsible for reviewing the suggested message, making any desired modifications, and performing the actual git operations.*
 
 ---
 *This workflow provides a general guideline. Adapt it based on your specific project needs and team practices.*

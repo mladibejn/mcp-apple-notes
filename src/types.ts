@@ -14,8 +14,11 @@ export interface EnrichedNote extends Note {
 }
 
 export interface Logger {
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-  debug(message: string, meta?: Record<string, unknown>): void;
+  debug(message: string): Promise<void>;
+  info(message: string): Promise<void>;
+  warn(message: string): Promise<void>;
+  error(message: string, error?: unknown): Promise<void>;
+  forComponent(component: string): Logger;
 }
+
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';

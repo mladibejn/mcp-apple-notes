@@ -22,16 +22,13 @@ export async function directoryExists(dirPath: string): Promise<boolean> {
  * @param recursive - Whether to create parent directories if they don't exist
  * @throws Error if directory creation fails
  */
-export async function ensureDirectory(dirPath: string, recursive = true): Promise<void> {
+export async function ensureDirectory(dirPath: string): Promise<void> {
   try {
-    const exists = await directoryExists(dirPath);
-    if (!exists) {
-      await mkdir(dirPath, { recursive });
-      console.log(`Created directory: ${dirPath}`);
-    }
+    await mkdir(dirPath, { recursive: true });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to create directory ${dirPath}: ${errorMessage}`);
+    if ((error as { code?: string }).code !== 'EEXIST') {
+      throw error;
+    }
   }
 }
 
