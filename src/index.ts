@@ -108,7 +108,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'Index all my Apple Notes for Semantic Search. Please tell the user that the sync takes couple of seconds up to couple of minutes depending on how many notes you have.',
         inputSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            testMode: {
+              type: 'boolean',
+              description: 'If true, only process the first 100 notes (for testing)',
+            },
+          },
           required: [],
         },
       },
@@ -244,7 +249,7 @@ interface NotesTable extends Table {
   add(data: NoteData[], options?: Partial<AddDataOptions>): Promise<void>;
 }
 
-export const indexNotes = async (notesTable: Table) => {
+export const indexNotes = async (notesTable: Table, testMode: boolean = false) => {
   const start = performance.now();
   let report = '';
   let allNotes: string[] = [];
@@ -262,7 +267,7 @@ export const indexNotes = async (notesTable: Table) => {
     // Get all notes
     allNotes = (await getNotes()) || [];
     const CHUNK_SIZE = 100;
-    const totalChunks = Math.ceil(allNotes.length / CHUNK_SIZE);
+    const totalChunks = testMode ? 1 : Math.ceil(allNotes.length / CHUNK_SIZE);
 
     // Initialize or resume checkpoint
     await checkpointManager.startStage(ProcessingStage.RAW_EXPORT);
@@ -272,14 +277,15 @@ export const indexNotes = async (notesTable: Table) => {
     // Send initial progress
     log('index-notes.progress', {
       status: 'starting',
-      message: `Starting to process ${allNotes.length} notes in ${totalChunks} chunks from index ${startIndex}`,
-      total: allNotes.length,
+      message: `Starting to process ${testMode ? CHUNK_SIZE : allNotes.length} notes in ${totalChunks} chunks from index ${startIndex}`,
+      total: testMode ? CHUNK_SIZE : allNotes.length,
       chunkSize: CHUNK_SIZE,
       resuming: startIndex > 0,
     });
 
-    // Process notes in chunks
-    for (let i = startIndex; i < allNotes.length; i += CHUNK_SIZE) {
+    // Process notes in chunks - run only once if in test mode
+    const maxIterations = testMode ? 1 : Math.ceil(allNotes.length / CHUNK_SIZE);
+    for (let i = startIndex; i < allNotes.length && processedChunks < maxIterations; i += CHUNK_SIZE) {
       try {
         const currentChunk = allNotes.slice(i, i + CHUNK_SIZE);
 
@@ -485,9 +491,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request, _c) => {
         return createTextResponse(JSON.stringify(note));
       }
       case 'index-notes': {
-        const { time, chunks } = await indexNotes(notesTable);
+        const testMode = args?.testMode === true;
+        const { time, chunks } = await indexNotes(notesTable, testMode);
         return createTextResponse(
-          `Indexed ${chunks} notes in ${time}ms. You can now search for them using the "search-notes" tool.`
+          `Indexed ${chunks} notes in ${time}ms${testMode ? ' (test mode - first 100 notes only)' : ''}. You can now search for them using the "search-notes" tool.`
         );
       }
       case 'search-notes': {

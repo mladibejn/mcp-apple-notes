@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
-import { DIRECTORIES } from '../config';
+import { BASE_DIR, DIRECTORIES } from '../config';
+import { ensureDirectory as ensureDirectoryFromPaths } from './paths';
 
 /**
  * Check if a directory exists
@@ -22,15 +23,7 @@ export async function directoryExists(dirPath: string): Promise<boolean> {
  * @param recursive - Whether to create parent directories if they don't exist
  * @throws Error if directory creation fails
  */
-export async function ensureDirectory(dirPath: string): Promise<void> {
-  try {
-    await mkdir(dirPath, { recursive: true });
-  } catch (error) {
-    if ((error as { code?: string }).code !== 'EEXIST') {
-      throw error;
-    }
-  }
-}
+export const ensureDirectory = ensureDirectoryFromPaths;
 
 /**
  * Ensure all required directories exist
@@ -39,9 +32,11 @@ export async function ensureDirectory(dirPath: string): Promise<void> {
  */
 export async function ensureDirectoryStructure(): Promise<void> {
   try {
+    // First ensure base directory exists
+    await ensureDirectory(BASE_DIR);
+
     // Create each directory in the DIRECTORIES config
     const directories = Object.values(DIRECTORIES);
-
     for (const dir of directories) {
       await ensureDirectory(dir);
     }

@@ -60,7 +60,7 @@ export async function writeJSON<T>(data: T, filePath: string, pretty = true): Pr
     });
   } catch (error) {
     if (error instanceof Error) {
-      throw new JSONFileError(`Error writing JSON to file ${filePath}: ${error.message}`, error);
+      throw new JSONFileError(`Error writing JSON to file ${JSON.stringify(filePath)}: ${error.message}`, error);
     }
     throw new JSONFileError(`Unknown error writing JSON to file ${filePath}`);
   }

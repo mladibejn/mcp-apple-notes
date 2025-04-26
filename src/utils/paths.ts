@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { access, readdir, mkdir } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { DIRECTORIES, FILE_CONFIG } from '../config';
+import { log } from '../services/logging';
 
 /**
  * Custom error class for path operations
@@ -36,6 +37,7 @@ export async function fileExists(filePath: string): Promise<boolean> {
     await access(filePath, constants.F_OK);
     return true;
   } catch {
+    log('fileExists', { filePath, exists: false });
     return false;
   }
 }
