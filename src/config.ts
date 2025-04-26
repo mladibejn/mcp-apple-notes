@@ -1,7 +1,11 @@
 import path from 'node:path';
+import os from 'node:os';
 
-// Base directory for all data
-export const BASE_DIR = path.join(process.cwd(), 'data');
+// Database directory in home
+export const DB_DIR = path.join(os.homedir(), '.mcp-apple-notes', 'data');
+
+// Base directory for all other data (in project directory)
+export const BASE_DIR = './data';
 
 // Directory structure constants
 export const DIRECTORIES = {
@@ -11,11 +15,10 @@ export const DIRECTORIES = {
   FINAL: path.join(BASE_DIR, 'final'),
 } as const;
 
-// File operation constants
+// File configuration constants
 export const FILE_CONFIG = {
-  ENCODING: 'utf-8',
-  JSON_INDENT: 2,
   DEFAULT_FILE_EXTENSION: '.json',
+  ENCODING: 'utf-8',
 } as const;
 
 // Checkpoint file constants
@@ -29,6 +32,7 @@ export const CHECKPOINT_CONFIG = {
 
 // Export all configuration as a single object
 export const config = {
+  DB_DIR,
   BASE_DIR,
   DIRECTORIES,
   FILE_CONFIG,

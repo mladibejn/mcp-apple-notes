@@ -3,64 +3,26 @@ import path from 'node:path';
 import { pipeline } from '@huggingface/transformers';
 import * as lancedb from '@lancedb/lancedb';
 import type { AddDataOptions, Data, Table } from '@lancedb/lancedb';
-import { EmbeddingFunction, LanceSchema, register } from '@lancedb/lancedb/embedding';
+import { LanceSchema } from '@lancedb/lancedb/embedding';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { type Float, Float32, Utf8 } from 'apache-arrow';
+import { Utf8 } from 'apache-arrow';
 import { runJxa } from 'run-jxa';
-import TurndownService from 'turndown';
 import { z } from 'zod';
-import { DIRECTORIES } from './config.js';
+import { DIRECTORIES } from './config';
 import { CheckpointManager, ProcessingStage } from './utils/checkpoint';
-import { ensureDirectory } from './utils/directory.js';
-import { writeJSON } from './utils/json.js';
+import { ensureDirectory } from './utils/directory';
+import { writeJSON } from './utils/json';
+import { sanitizeHtmlToMarkdown } from './utils/sanitizeHtml';
+import { sanitizeRawNotes } from './services/dataManagement';
+import { log } from './services/logging';
+import { OnDeviceEmbeddingFunction } from './services/onDeviceEmbeddingFunction';
 
-const { turndown } = new TurndownService();
 const db = await lancedb.connect(path.join(os.homedir(), '.mcp-apple-notes', 'data'));
 const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
-@register('openai')
-export class OnDeviceEmbeddingFunction extends EmbeddingFunction<string> {
-  toJSON(): object {
-    return {};
-  }
-  ndims() {
-    return 384;
-  }
-  embeddingDataType(): Float {
-    return new Float32();
-  }
-  async computeQueryEmbeddings(data: string) {
-    const output = await extractor(data, { pooling: 'mean' });
-    return output.data as number[];
-  }
-  async computeSourceEmbeddings(data: string[]) {
-    return await Promise.all(
-      data.map(async (item) => {
-        const output = await extractor(item, { pooling: 'mean' });
-
-        return output.data as number[];
-      })
-    );
-  }
-}
-
-const log = (method: string, params: Record<string, unknown>) => {
-  console.error(
-    JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'progress',
-      params: {
-        timestamp: new Date().toISOString(),
-        method,
-        ...params,
-      },
-    })
-  );
-};
-
-const func = new OnDeviceEmbeddingFunction();
+const func = new OnDeviceEmbeddingFunction(extractor);
 
 const notesTableSchema = LanceSchema({
   title: func.sourceField(new Utf8()),
@@ -150,6 +112,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             content: { type: 'string' },
           },
           required: ['title', 'content'],
+        },
+      },
+      {
+        name: 'sanitize-html',
+        description: 'Sanitize all raw notes in data/raw by converting HTML to Markdown. Moves original content to rawContent and saves Markdown as content.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
         },
       },
     ],
@@ -249,7 +220,7 @@ interface NotesTable extends Table {
   add(data: NoteData[], options?: Partial<AddDataOptions>): Promise<void>;
 }
 
-export const indexNotes = async (notesTable: Table, testMode: boolean = false) => {
+export const indexNotes = async (notesTable: Table, testMode = false) => {
   const start = performance.now();
   let report = '';
   let allNotes: string[] = [];
@@ -322,7 +293,8 @@ export const indexNotes = async (notesTable: Table, testMode: boolean = false) =
             try {
               return {
                 ...node,
-                content: turndown(node?.content || ''),
+                rawContent: node?.content || '',
+                content: sanitizeHtmlToMarkdown(node?.content || ''),
               };
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -333,7 +305,12 @@ export const indexNotes = async (notesTable: Table, testMode: boolean = false) =
                 error: errorMessage,
                 node,
               });
-              return node;
+              // Always return an object with both content and rawContent for type safety
+              return {
+                ...node,
+                rawContent: node?.content || '',
+                content: node?.content || '',
+              };
             }
           })
           .filter((note) => note !== null)
@@ -343,6 +320,7 @@ export const indexNotes = async (notesTable: Table, testMode: boolean = false) =
                 id: `${i + index}`,
                 title: note.title,
                 content: note.content,
+                rawContent: note.rawContent,
                 creation_date: note.creation_date,
                 modification_date: note.modification_date,
               }) as NoteData
@@ -501,6 +479,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request, _c) => {
         const { query } = QueryNotesSchema.parse(args);
         const results = await searchAndCombineResults(notesTable, query);
         return createTextResponse(JSON.stringify(results));
+      }
+      case 'sanitize-html': {
+        await sanitizeRawNotes();
+        return createTextResponse('Sanitized all raw notes in data/raw.');
       }
       default:
         throw new Error(`Unknown tool: ${name}`);

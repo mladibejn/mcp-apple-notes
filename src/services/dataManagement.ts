@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { EnrichedNote, ClusterAssignments } from '../types';
-import { ensureDirectory } from '../utils/fileUtils';
+import type { EnrichedNote } from '../types';
+import { ensureDirectory } from '../utils/directory';
+import { sanitizeHtmlToMarkdown } from '../utils/sanitizeHtml';
+import { log } from './logging';
+import { BASE_DIR, DIRECTORIES } from '../config';
 
 /**
  * Load enriched notes from the processed data directory
@@ -51,13 +54,6 @@ export async function loadClusterAssignments(): Promise<ClusterAssignments> {
             throw new Error('Cluster assignments data is not in the expected object format');
         }
 
-        // Basic validation of the assignments structure
-        Object.entries(assignments).forEach(([noteId, clusterId]) => {
-            if (typeof clusterId !== 'number') {
-                throw new Error(`Invalid cluster ID for note ${noteId}: expected number, got ${typeof clusterId}`);
-            }
-        });
-
         return assignments;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -69,6 +65,23 @@ export async function loadClusterAssignments(): Promise<ClusterAssignments> {
 
 export interface NoteWithCluster extends EnrichedNote {
     cluster_id: number;
+    metadata?: {
+        title?: string;
+        created_at?: string;
+        updated_at?: string;
+        tags?: string[];
+        [key: string]: any;
+    };
+    enrichments?: {
+        embedding?: number[];
+        summary?: string;
+        keywords?: string[];
+        sentiment?: {
+            score: number;
+            label: string;
+        };
+        [key: string]: any;
+    };
 }
 
 /**
@@ -86,9 +99,8 @@ export function mergeNotesWithClusters(
     return notes.map(note => {
         const clusterId = clusterAssignments[note.id];
         if (clusterId === undefined) {
-            console.warn(`No cluster assignment found for note ${note.id}, using default cluster ID ${defaultClusterId}`);
+            // Optionally log a warning here
         }
-
         return {
             ...note,
             cluster_id: clusterId ?? defaultClusterId
@@ -138,12 +150,12 @@ export function formatFinalNotes(notes: NoteWithCluster[]): FinalNote[] {
             content: note.content,
             cluster_id: note.cluster_id,
             metadata: {
-                ...note.metadata,
+                ...(note.metadata ?? {}),
                 created_at: note.metadata?.created_at || new Date().toISOString(),
                 updated_at: note.metadata?.updated_at || new Date().toISOString(),
             },
             enrichments: {
-                ...note.enrichments,
+                ...(note.enrichments ?? {}),
                 embedding: note.enrichments?.embedding || [],
                 keywords: note.enrichments?.keywords || [],
                 sentiment: note.enrichments?.sentiment || {
@@ -305,48 +317,48 @@ export async function generateFinalDataset(): Promise<GenerationResult> {
         await ensureDirectory(finalDir);
 
         // Load data
-        console.log('Loading enriched notes...');
+        log('dataManagement.info', { message: 'Loading enriched notes...' });
         const enrichedNotes = await loadEnrichedNotes();
-        console.log(`Loaded ${enrichedNotes.length} enriched notes`);
+        log('dataManagement.info', { message: `Loaded ${enrichedNotes.length} enriched notes` });
 
-        console.log('Loading cluster assignments...');
+        log('dataManagement.info', { message: 'Loading cluster assignments...' });
         const clusterAssignments = await loadClusterAssignments();
-        console.log('Loaded cluster assignments');
+        log('dataManagement.info', { message: 'Loaded cluster assignments' });
 
         // Merge notes with cluster assignments
-        console.log('Merging notes with cluster assignments...');
+        log('dataManagement.info', { message: 'Merging notes with cluster assignments...' });
         const notesWithClusters = mergeNotesWithClusters(enrichedNotes, clusterAssignments);
-        console.log('Merged notes with cluster assignments');
+        log('dataManagement.info', { message: 'Merged notes with cluster assignments' });
 
         // Format notes into final structure
-        console.log('Formatting notes into final structure...');
+        log('dataManagement.info', { message: 'Formatting notes into final structure...' });
         const finalNotes = formatFinalNotes(notesWithClusters);
-        console.log('Formatted notes');
+        log('dataManagement.info', { message: 'Formatted notes' });
 
         // Generate statistics
-        console.log('Generating dataset statistics...');
+        log('dataManagement.info', { message: 'Generating dataset statistics...' });
         const statistics = generateSummaryStatistics(finalNotes);
-        console.log('Generated statistics');
+        log('dataManagement.info', { message: 'Generated statistics' });
 
         // Save results
         const notesPath = path.join(finalDir, 'notes_final.json');
         const statisticsPath = path.join(finalDir, 'dataset_statistics.json');
 
-        console.log('Saving final dataset...');
+        log('dataManagement.info', { message: 'Saving final dataset...' });
         await fs.promises.writeFile(
             notesPath,
             JSON.stringify(finalNotes, null, 2),
             'utf-8'
         );
-        console.log(`Saved final notes to ${notesPath}`);
+        log('dataManagement.info', { message: `Saved final notes to ${notesPath}` });
 
-        console.log('Saving statistics...');
+        log('dataManagement.info', { message: 'Saving statistics...' });
         await fs.promises.writeFile(
             statisticsPath,
             JSON.stringify(statistics, null, 2),
             'utf-8'
         );
-        console.log(`Saved statistics to ${statisticsPath}`);
+        log('dataManagement.info', { message: `Saved statistics to ${statisticsPath}` });
 
         return {
             notesPath,
@@ -354,7 +366,26 @@ export async function generateFinalDataset(): Promise<GenerationResult> {
             statistics
         };
     } catch (error) {
-        console.error('Error generating final dataset:', error);
+        log('dataManagement.error', { message: 'Error generating final dataset', error: error instanceof Error ? error.message : String(error) });
         throw error;
+    }
+}
+
+/**
+ * Sanitize all raw notes in data/raw by converting HTML to Markdown.
+ * Moves original content to rawContent and saves Markdown as content.
+ */
+export async function sanitizeRawNotes(rawDir = `${BASE_DIR}/raw`) {
+    const files = await fs.promises.readdir(rawDir);
+    for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        const filePath = path.join(rawDir, file);
+        const note = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'));
+        // Only update if not already sanitized
+        if (typeof note.rawContent === 'undefined') {
+            note.rawContent = note.content || '';
+            note.content = sanitizeHtmlToMarkdown(note.rawContent);
+            await fs.promises.writeFile(filePath, JSON.stringify(note, null, 2), 'utf-8');
+        }
     }
 } 

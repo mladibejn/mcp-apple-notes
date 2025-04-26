@@ -35,6 +35,7 @@
     "ml-kmeans": "^6.0.0",
     "openai": "^4.96.0",
     "run-jxa": "^3.0.0",
+    "sanitize-html": "^2.16.0",
     "turndown": "^7.2.0",
     "zod": "^3.24.1"
   },
@@ -44,5 +45,6 @@
     "@types/turndown": "^5.0.5",
     "bun-types": "^1.2.10",
     "typescript": "^5.8.3"
-  }
+  },
+  "packageManager": "bun@1.2.25"
 }

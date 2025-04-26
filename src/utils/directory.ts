@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
 import { BASE_DIR, DIRECTORIES } from '../config';
 import { ensureDirectory as ensureDirectoryFromPaths } from './paths';
+import { log } from '../services/logging';
 
 /**
  * Check if a directory exists
@@ -41,7 +42,7 @@ export async function ensureDirectoryStructure(): Promise<void> {
       await ensureDirectory(dir);
     }
 
-    console.log('Directory structure verified and created if needed');
+    log('directory.verified', { message: 'Directory structure verified and created if needed' });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Failed to create directory structure: ${errorMessage}`);
@@ -55,9 +56,9 @@ export async function ensureDirectoryStructure(): Promise<void> {
 export async function initializeDirectories(): Promise<void> {
   try {
     await ensureDirectoryStructure();
-    console.log('Directory initialization completed successfully');
+    log('directory.initialized', { message: 'Directory initialization completed successfully' });
   } catch (error) {
-    console.error('Directory initialization failed:', error);
-    throw error; // Re-throw to let caller handle the error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to create directory structure: ${errorMessage}`);
   }
 }
