@@ -21,6 +21,7 @@ import { ensureDirectory } from "./utils/directory.js";
 import { writeJSON } from "./utils/json.js";
 import { DIRECTORIES } from "./config.js";
 import type { Table, Data, AddDataOptions } from "@lancedb/lancedb";
+import { CheckpointManager, ProcessingStage, ProcessingStatus } from './utils/checkpoint';
 
 const { turndown } = new TurndownService();
 const db = await lancedb.connect(
@@ -259,6 +260,10 @@ export const indexNotes = async (notesTable: Table) => {
   let allChunks: NoteChunk[] = [];
   let processedChunks = 0;
 
+  // Initialize checkpoint manager
+  const checkpointManager = new CheckpointManager();
+  await checkpointManager.initialize();
+
   try {
     // Ensure raw directory exists
     await ensureDirectory(DIRECTORIES.RAW);
@@ -268,16 +273,22 @@ export const indexNotes = async (notesTable: Table) => {
     const CHUNK_SIZE = 100;
     const totalChunks = Math.ceil(allNotes.length / CHUNK_SIZE);
 
+    // Initialize or resume checkpoint
+    await checkpointManager.startStage(ProcessingStage.RAW_EXPORT, allNotes.length);
+    const lastProcessedNote = await checkpointManager.getNextNote();
+    const startIndex = lastProcessedNote ? Number.parseInt(lastProcessedNote.id) + 1 : 0;
+
     // Send initial progress
     log("index-notes.progress", {
       status: "starting",
-      message: `Starting to process ${allNotes.length} notes in ${totalChunks} chunks`,
+      message: `Starting to process ${allNotes.length} notes in ${totalChunks} chunks from index ${startIndex}`,
       total: allNotes.length,
-      chunkSize: CHUNK_SIZE
+      chunkSize: CHUNK_SIZE,
+      resuming: startIndex > 0
     });
 
     // Process notes in chunks
-    for (let i = 0; i < allNotes.length; i += CHUNK_SIZE) {
+    for (let i = startIndex; i < allNotes.length; i += CHUNK_SIZE) {
       try {
         const currentChunk = allNotes.slice(i, i + CHUNK_SIZE);
 
@@ -343,6 +354,8 @@ export const indexNotes = async (notesTable: Table) => {
             try {
               const filename = `note-${note.id}.json`;
               await writeJSON(note, path.join(DIRECTORIES.RAW, filename));
+              // Update checkpoint for each note
+              await checkpointManager.updateNoteProgress(note.id, note.title);
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               report += `Error saving note ${note.id} to file: ${errorMessage}\n`;
@@ -360,14 +373,16 @@ export const indexNotes = async (notesTable: Table) => {
         allChunks = [...allChunks, ...chunkResults];
         processedChunks++;
 
-        // Send chunk completion progress
+        // Send chunk completion progress with checkpoint info
+        const progress = await checkpointManager.getProgress();
         log("index-notes.progress", {
           status: "chunk-complete",
           message: `Completed chunk ${processedChunks} of ${totalChunks}`,
           currentChunk: processedChunks,
           totalChunks,
           notesProcessed: allChunks.length,
-          notesSaved: allChunks.length
+          notesSaved: allChunks.length,
+          progress
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -382,12 +397,17 @@ export const indexNotes = async (notesTable: Table) => {
       }
     }
 
+    // Complete the stage
+    await checkpointManager.completeStage(ProcessingStage.RAW_EXPORT);
+
     // Send final progress
+    const finalProgress = await checkpointManager.getProgress();
     log("index-notes.progress", {
       status: "completed",
       message: "All chunks processed and saved successfully",
       totalProcessed: allChunks.length,
-      time: performance.now() - start
+      time: performance.now() - start,
+      progress: finalProgress
     });
 
     return {
@@ -395,9 +415,13 @@ export const indexNotes = async (notesTable: Table) => {
       report,
       allNotes: allNotes.length,
       time: performance.now() - start,
+      progress: finalProgress
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Mark stage as failed in checkpoint
+    await checkpointManager.failStage(ProcessingStage.RAW_EXPORT, errorMessage);
+
     log("index-notes.error", {
       status: "fatal",
       message: "Fatal error during indexing",
