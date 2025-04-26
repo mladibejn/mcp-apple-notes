@@ -1,38 +1,26 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
-import * as lancedb from "@lancedb/lancedb";
-import { runJxa } from "run-jxa";
-import path from "node:path";
-import os from "node:os";
-import TurndownService from "turndown";
-import {
-  EmbeddingFunction,
-  LanceSchema,
-  register,
-} from "@lancedb/lancedb/embedding";
-import { type Float, Float32, Utf8 } from "apache-arrow";
-import { pipeline } from "@huggingface/transformers";
-import { ensureDirectory } from "./utils/directory.js";
-import { writeJSON } from "./utils/json.js";
-import { DIRECTORIES } from "./config.js";
-import type { Table, Data, AddDataOptions } from "@lancedb/lancedb";
+import os from 'node:os';
+import path from 'node:path';
+import { pipeline } from '@huggingface/transformers';
+import * as lancedb from '@lancedb/lancedb';
+import type { AddDataOptions, Data, Table } from '@lancedb/lancedb';
+import { EmbeddingFunction, LanceSchema, register } from '@lancedb/lancedb/embedding';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { type Float, Float32, Utf8 } from 'apache-arrow';
+import { runJxa } from 'run-jxa';
+import TurndownService from 'turndown';
+import { z } from 'zod';
+import { DIRECTORIES } from './config.js';
 import { CheckpointManager, ProcessingStage } from './utils/checkpoint';
+import { ensureDirectory } from './utils/directory.js';
+import { writeJSON } from './utils/json.js';
 
 const { turndown } = new TurndownService();
-const db = await lancedb.connect(
-  path.join(os.homedir(), ".mcp-apple-notes", "data")
-);
-const extractor = await pipeline(
-  "feature-extraction",
-  "Xenova/all-MiniLM-L6-v2"
-);
+const db = await lancedb.connect(path.join(os.homedir(), '.mcp-apple-notes', 'data'));
+const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
-@register("openai")
+@register('openai')
 export class OnDeviceEmbeddingFunction extends EmbeddingFunction<string> {
   toJSON(): object {
     return {};
@@ -44,13 +32,13 @@ export class OnDeviceEmbeddingFunction extends EmbeddingFunction<string> {
     return new Float32();
   }
   async computeQueryEmbeddings(data: string) {
-    const output = await extractor(data, { pooling: "mean" });
+    const output = await extractor(data, { pooling: 'mean' });
     return output.data as number[];
   }
   async computeSourceEmbeddings(data: string[]) {
     return await Promise.all(
       data.map(async (item) => {
-        const output = await extractor(item, { pooling: "mean" });
+        const output = await extractor(item, { pooling: 'mean' });
 
         return output.data as number[];
       })
@@ -59,15 +47,17 @@ export class OnDeviceEmbeddingFunction extends EmbeddingFunction<string> {
 }
 
 const log = (method: string, params: Record<string, unknown>) => {
-  console.error(JSON.stringify({
-    jsonrpc: "2.0",
-    method: "progress",
-    params: {
-      timestamp: new Date().toISOString(),
-      method,
-      ...params
-    }
-  }));
+  console.error(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'progress',
+      params: {
+        timestamp: new Date().toISOString(),
+        method,
+        ...params,
+      },
+    })
+  );
 };
 
 const func = new OnDeviceEmbeddingFunction();
@@ -90,8 +80,8 @@ const GetNoteSchema = z.object({
 
 const server = new Server(
   {
-    name: "my-apple-notes-mcp",
-    version: "1.0.0",
+    name: 'my-apple-notes-mcp',
+    version: '1.0.0',
   },
   {
     capabilities: {
@@ -104,57 +94,57 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "list-notes",
-        description: "Lists just the titles of all my Apple Notes",
+        name: 'list-notes',
+        description: 'Lists just the titles of all my Apple Notes',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {},
           required: [],
         },
       },
       {
-        name: "index-notes",
+        name: 'index-notes',
         description:
-          "Index all my Apple Notes for Semantic Search. Please tell the user that the sync takes couple of seconds up to couple of minutes depending on how many notes you have.",
+          'Index all my Apple Notes for Semantic Search. Please tell the user that the sync takes couple of seconds up to couple of minutes depending on how many notes you have.',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {},
           required: [],
         },
       },
       {
-        name: "get-note",
-        description: "Get a note full content and details by title",
+        name: 'get-note',
+        description: 'Get a note full content and details by title',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {
             title: z.string(),
           },
-          required: ["title"],
+          required: ['title'],
         },
       },
       {
-        name: "search-notes",
-        description: "Search for notes by title or content",
+        name: 'search-notes',
+        description: 'Search for notes by title or content',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {
             query: z.string(),
           },
-          required: ["query"],
+          required: ['query'],
         },
       },
       {
-        name: "create-note",
+        name: 'create-note',
         description:
-          "Create a new Apple Note with specified title and content. Must be in HTML format WITHOUT newlines",
+          'Create a new Apple Note with specified title and content. Must be in HTML format WITHOUT newlines',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {
-            title: { type: "string" },
-            content: { type: "string" },
+            title: { type: 'string' },
+            content: { type: 'string' },
           },
-          required: ["title", "content"],
+          required: ['title', 'content'],
         },
       },
     ],
@@ -179,10 +169,10 @@ const getNotes = async () => {
   let hasMore = true;
 
   while (hasMore) {
-    log("get-notes.progress", {
-      status: "processing",
+    log('get-notes.progress', {
+      status: 'processing',
       message: `Fetching notes chunk starting at offset ${offset}`,
-      currentOffset: offset
+      currentOffset: offset,
     });
 
     const chunk = await getNotesChunk(offset, CHUNK_SIZE);
@@ -195,10 +185,10 @@ const getNotes = async () => {
     }
   }
 
-  log("get-notes.progress", {
-    status: "completed",
-    message: "Notes fetched successfully",
-    notes: allNotes.length
+  log('get-notes.progress', {
+    status: 'completed',
+    message: 'Notes fetched successfully',
+    notes: allNotes.length,
   });
 
   return allNotes;
@@ -249,13 +239,14 @@ interface NoteChunk {
 // Make NoteChunk compatible with Record<string, unknown>
 type NoteData = NoteChunk & Record<string, unknown>;
 
+// biome-ignore lint/correctness/noUnusedVariables: <explanation>
 interface NotesTable extends Table {
   add(data: NoteData[], options?: Partial<AddDataOptions>): Promise<void>;
 }
 
 export const indexNotes = async (notesTable: Table) => {
   const start = performance.now();
-  let report = "";
+  let report = '';
   let allNotes: string[] = [];
   let allChunks: NoteChunk[] = [];
   let processedChunks = 0;
@@ -279,12 +270,12 @@ export const indexNotes = async (notesTable: Table) => {
     const startIndex = nextNoteId ? Number.parseInt(nextNoteId) + 1 : 0;
 
     // Send initial progress
-    log("index-notes.progress", {
-      status: "starting",
+    log('index-notes.progress', {
+      status: 'starting',
       message: `Starting to process ${allNotes.length} notes in ${totalChunks} chunks from index ${startIndex}`,
       total: allNotes.length,
       chunkSize: CHUNK_SIZE,
-      resuming: startIndex > 0
+      resuming: startIndex > 0,
     });
 
     // Process notes in chunks
@@ -293,12 +284,12 @@ export const indexNotes = async (notesTable: Table) => {
         const currentChunk = allNotes.slice(i, i + CHUNK_SIZE);
 
         // Send chunk progress
-        log("index-notes.progress", {
-          status: "processing",
+        log('index-notes.progress', {
+          status: 'processing',
           message: `Processing chunk ${processedChunks + 1} of ${totalChunks}`,
           currentChunk: processedChunks + 1,
           totalChunks,
-          notesInChunk: currentChunk.length
+          notesInChunk: currentChunk.length,
         });
 
         // Process current chunk
@@ -309,10 +300,10 @@ export const indexNotes = async (notesTable: Table) => {
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               report += `Error getting note details for ${note}: ${errorMessage}\n`;
-              log("index-notes.error", {
-                status: "error",
+              log('index-notes.error', {
+                status: 'error',
                 message: `Failed to get note details for ${note}`,
-                error: errorMessage
+                error: errorMessage,
               });
               return null;
             }
@@ -325,13 +316,13 @@ export const indexNotes = async (notesTable: Table) => {
             try {
               return {
                 ...node,
-                content: turndown(node?.content || ""),
+                content: turndown(node?.content || ''),
               };
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               report += `Error processing note ${node?.title}: ${errorMessage}\n`;
-              log("index-notes.error", {
-                status: "error",
+              log('index-notes.error', {
+                status: 'error',
                 message: `Failed to process note ${node?.title}`,
                 error: errorMessage,
                 node,
@@ -340,13 +331,16 @@ export const indexNotes = async (notesTable: Table) => {
             }
           })
           .filter((note) => note !== null)
-          .map((note, index) => ({
-            id: `${i + index}`,
-            title: note.title,
-            content: note.content,
-            creation_date: note.creation_date,
-            modification_date: note.modification_date,
-          } as NoteData));
+          .map(
+            (note, index) =>
+              ({
+                id: `${i + index}`,
+                title: note.title,
+                content: note.content,
+                creation_date: note.creation_date,
+                modification_date: note.modification_date,
+              }) as NoteData
+          );
 
         // Save each note to a file in the raw directory
         await Promise.all(
@@ -359,10 +353,10 @@ export const indexNotes = async (notesTable: Table) => {
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               report += `Error saving note ${note.id} to file: ${errorMessage}\n`;
-              log("index-notes.error", {
-                status: "error",
+              log('index-notes.error', {
+                status: 'error',
                 message: `Failed to save note ${note.id} to file`,
-                error: errorMessage
+                error: errorMessage,
               });
             }
           })
@@ -375,22 +369,22 @@ export const indexNotes = async (notesTable: Table) => {
 
         // Send chunk completion progress with checkpoint info
         const progress = await checkpointManager.getStageProgress(ProcessingStage.RAW_EXPORT);
-        log("index-notes.progress", {
-          status: "chunk-complete",
+        log('index-notes.progress', {
+          status: 'chunk-complete',
           message: `Completed chunk ${processedChunks} of ${totalChunks}`,
           currentChunk: processedChunks,
           totalChunks,
           notesProcessed: allChunks.length,
           notesSaved: allChunks.length,
-          progress
+          progress,
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         report += `Error processing chunk ${processedChunks + 1}: ${errorMessage}\n`;
-        log("index-notes.error", {
-          status: "error",
+        log('index-notes.error', {
+          status: 'error',
           message: `Failed to process chunk ${processedChunks + 1}`,
-          error: errorMessage
+          error: errorMessage,
         });
         // Continue with next chunk
         processedChunks++;
@@ -402,12 +396,12 @@ export const indexNotes = async (notesTable: Table) => {
 
     // Send final progress
     const finalProgress = await checkpointManager.getStageProgress(ProcessingStage.RAW_EXPORT);
-    log("index-notes.progress", {
-      status: "completed",
-      message: "All chunks processed and saved successfully",
+    log('index-notes.progress', {
+      status: 'completed',
+      message: 'All chunks processed and saved successfully',
       totalProcessed: allChunks.length,
       time: performance.now() - start,
-      progress: finalProgress
+      progress: finalProgress,
     });
 
     return {
@@ -415,17 +409,17 @@ export const indexNotes = async (notesTable: Table) => {
       report,
       allNotes: allNotes.length,
       time: performance.now() - start,
-      progress: finalProgress
+      progress: finalProgress,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     // Mark stage as failed in checkpoint
     await checkpointManager.failStage(ProcessingStage.RAW_EXPORT, errorMessage);
 
-    log("index-notes.error", {
-      status: "fatal",
-      message: "Fatal error during indexing",
-      error: errorMessage
+    log('index-notes.error', {
+      status: 'fatal',
+      message: 'Fatal error during indexing',
+      error: errorMessage,
     });
     throw new Error(`Failed to index notes: ${errorMessage}`);
   }
@@ -433,18 +427,14 @@ export const indexNotes = async (notesTable: Table) => {
 
 export const createNotesTable = async (overrideName?: string) => {
   const start = performance.now();
-  const notesTable = await db.createEmptyTable(
-    overrideName || "notes",
-    notesTableSchema,
-    {
-      mode: "create",
-      existOk: true,
-    }
-  );
+  const notesTable = await db.createEmptyTable(overrideName || 'notes', notesTableSchema, {
+    mode: 'create',
+    existOk: true,
+  });
 
   const indices = await notesTable.listIndices();
-  if (!indices.find((index) => index.name === "content_idx")) {
-    await notesTable.createIndex("content", {
+  if (!indices.find((index) => index.name === 'content_idx')) {
+    await notesTable.createIndex('content', {
       config: lancedb.Index.fts(),
       replace: true,
     });
@@ -454,11 +444,11 @@ export const createNotesTable = async (overrideName?: string) => {
 
 const createNote = async (title: string, content: string) => {
   // Escape special characters and convert newlines to \n
-  const escapedTitle = title.replace(/[\\'"]/g, "\\$&");
+  const escapedTitle = title.replace(/[\\'"]/g, '\\$&');
   const escapedContent = content
-    .replace(/[\\'"]/g, "\\$&")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "");
+    .replace(/[\\'"]/g, '\\$&')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '');
 
   await runJxa(`
     const app = Application('Notes');
@@ -474,29 +464,33 @@ const createNote = async (title: string, content: string) => {
 };
 
 // Handle tool execution
-server.setRequestHandler(CallToolRequestSchema, async (request, c) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, _c) => {
   const { notesTable } = await createNotesTable();
   const { name, arguments: args } = request.params;
 
   try {
     switch (name) {
-      case "create-note": {
+      case 'create-note': {
         const { title, content } = CreateNoteSchema.parse(args);
         await createNote(title, content);
         return createTextResponse(`Created note "${title}" successfully.`);
       }
-      case "list-notes":
-        return createTextResponse(`There are ${await notesTable.countRows()} notes in your Apple Notes database.`);
-      case "get-note": {
+      case 'list-notes':
+        return createTextResponse(
+          `There are ${await notesTable.countRows()} notes in your Apple Notes database.`
+        );
+      case 'get-note': {
         const { title } = GetNoteSchema.parse(args);
         const note = await getNoteDetailsByTitle(title);
         return createTextResponse(JSON.stringify(note));
       }
-      case "index-notes": {
+      case 'index-notes': {
         const { time, chunks } = await indexNotes(notesTable);
-        return createTextResponse(`Indexed ${chunks} notes in ${time}ms. You can now search for them using the "search-notes" tool.`);
+        return createTextResponse(
+          `Indexed ${chunks} notes in ${time}ms. You can now search for them using the "search-notes" tool.`
+        );
       }
-      case "search-notes": {
+      case 'search-notes': {
         const { query } = QueryNotesSchema.parse(args);
         const results = await searchAndCombineResults(notesTable, query);
         return createTextResponse(JSON.stringify(results));
@@ -506,7 +500,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request, c) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
+      throw new Error(
+        `Invalid arguments: ${error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+      );
     }
     throw error;
   }
@@ -515,10 +511,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request, c) => {
 // Start the server
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("Local Machine MCP Server running on stdio");
+console.error('Local Machine MCP Server running on stdio');
 
 const createTextResponse = (text: string) => ({
-  content: [{ type: "text", text }],
+  content: [{ type: 'text', text }],
 });
 
 /**
@@ -532,17 +528,11 @@ export const searchAndCombineResults = async (
 ) => {
   const [vectorResults, ftsSearchResults] = await Promise.all([
     (async () => {
-      const results = await notesTable
-        .search(query, "vector")
-        .limit(limit)
-        .toArray();
+      const results = await notesTable.search(query, 'vector').limit(limit).toArray();
       return results;
     })(),
     (async () => {
-      const results = await notesTable
-        .search(query, "fts", "content")
-        .limit(limit)
-        .toArray();
+      const results = await notesTable.search(query, 'fts', 'content').limit(limit).toArray();
       return results;
     })(),
   ]);
@@ -565,7 +555,7 @@ export const searchAndCombineResults = async (
     .sort(([, a], [, b]) => b - a)
     .slice(0, limit)
     .map(([key]) => {
-      const [title, content] = key.split("::");
+      const [title, content] = key.split('::');
       return { title, content };
     });
 

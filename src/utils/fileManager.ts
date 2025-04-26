@@ -1,23 +1,23 @@
 import { DIRECTORIES, FILE_CONFIG } from '../config';
 import { ensureDirectory, ensureDirectoryStructure } from './directory';
-import { readJSON, writeJSON, writeJSONSafe, updateJSON, JSONFileError } from './json';
+import { JSONFileError, readJSON, updateJSON, writeJSON, writeJSONSafe } from './json';
 import {
-    getFilePath,
-    fileExists,
-    listFiles,
-    generateTimestampedFilename,
-    sanitizeFilename,
-    getUniqueFilename,
-    resolvePathInDirectory,
-    isPathInDirectory,
-    PathError
+  PathError,
+  fileExists,
+  generateTimestampedFilename,
+  getFilePath,
+  getUniqueFilename,
+  isPathInDirectory,
+  listFiles,
+  resolvePathInDirectory,
+  sanitizeFilename,
 } from './paths';
 
 /**
  * Initialize the file manager and ensure directory structure exists
  */
 export async function initialize(): Promise<void> {
-    await ensureDirectoryStructure();
+  await ensureDirectoryStructure();
 }
 
 /**
@@ -27,11 +27,11 @@ export async function initialize(): Promise<void> {
  * @returns Parsed JSON data
  */
 export async function readJSONFromDirectory<T>(
-    directory: keyof typeof DIRECTORIES,
-    filename: string
+  directory: keyof typeof DIRECTORIES,
+  filename: string
 ): Promise<T> {
-    const filePath = getFilePath(directory, filename);
-    return readJSON<T>(filePath);
+  const filePath = getFilePath(directory, filename);
+  return readJSON<T>(filePath);
 }
 
 /**
@@ -42,17 +42,17 @@ export async function readJSONFromDirectory<T>(
  * @param safe - Whether to use atomic write operation
  */
 export async function writeJSONToDirectory<T>(
-    data: T,
-    directory: keyof typeof DIRECTORIES,
-    filename: string,
-    safe = false
+  data: T,
+  directory: keyof typeof DIRECTORIES,
+  filename: string,
+  safe = false
 ): Promise<void> {
-    const filePath = getFilePath(directory, filename);
-    if (safe) {
-        await writeJSONSafe(data, filePath);
-    } else {
-        await writeJSON(data, filePath);
-    }
+  const filePath = getFilePath(directory, filename);
+  if (safe) {
+    await writeJSONSafe(data, filePath);
+  } else {
+    await writeJSON(data, filePath);
+  }
 }
 
 /**
@@ -63,12 +63,12 @@ export async function writeJSONToDirectory<T>(
  * @returns Updated data
  */
 export async function updateJSONInDirectory<T>(
-    directory: keyof typeof DIRECTORIES,
-    filename: string,
-    updateFn: (data: T) => T | Promise<T>
+  directory: keyof typeof DIRECTORIES,
+  filename: string,
+  updateFn: (data: T) => T | Promise<T>
 ): Promise<T> {
-    const filePath = getFilePath(directory, filename);
-    return updateJSON<T>(filePath, updateFn);
+  const filePath = getFilePath(directory, filename);
+  return updateJSON<T>(filePath, updateFn);
 }
 
 /**
@@ -79,15 +79,12 @@ export async function updateJSONInDirectory<T>(
  * @returns Unique filename
  */
 export async function generateUniqueFilename(
-    directory: keyof typeof DIRECTORIES,
-    baseName: string,
-    extension = FILE_CONFIG.DEFAULT_FILE_EXTENSION
+  directory: keyof typeof DIRECTORIES,
+  baseName: string,
+  extension = FILE_CONFIG.DEFAULT_FILE_EXTENSION
 ): Promise<string> {
-    const timestampedName = generateTimestampedFilename(
-        sanitizeFilename(baseName),
-        extension
-    );
-    return getUniqueFilename(directory, timestampedName);
+  const timestampedName = generateTimestampedFilename(sanitizeFilename(baseName), extension);
+  return getUniqueFilename(directory, timestampedName);
 }
 
 /**
@@ -97,10 +94,10 @@ export async function generateUniqueFilename(
  * @returns Array of file paths
  */
 export async function listFilesInDirectory(
-    directory: keyof typeof DIRECTORIES,
-    pattern?: RegExp
+  directory: keyof typeof DIRECTORIES,
+  pattern?: RegExp
 ): Promise<string[]> {
-    return listFiles(directory, pattern);
+  return listFiles(directory, pattern);
 }
 
 /**
@@ -110,21 +107,19 @@ export async function listFilesInDirectory(
  * @returns True if file exists
  */
 export async function checkFileExists(
-    directory: keyof typeof DIRECTORIES,
-    filename: string
+  directory: keyof typeof DIRECTORIES,
+  filename: string
 ): Promise<boolean> {
-    const filePath = getFilePath(directory, filename);
-    return fileExists(filePath);
+  const filePath = getFilePath(directory, filename);
+  return fileExists(filePath);
 }
 
 /**
  * Ensure a specific directory exists
  * @param directory - Target directory from DIRECTORIES config
  */
-export async function ensureDirectoryExists(
-    directory: keyof typeof DIRECTORIES
-): Promise<void> {
-    await ensureDirectory(DIRECTORIES[directory]);
+export async function ensureDirectoryExists(directory: keyof typeof DIRECTORIES): Promise<void> {
+  await ensureDirectory(DIRECTORIES[directory]);
 }
 
 /**
@@ -134,11 +129,11 @@ export async function ensureDirectoryExists(
  * @returns True if path is within the directory
  */
 export function validatePathInDirectory(
-    directory: keyof typeof DIRECTORIES,
-    path: string
+  directory: keyof typeof DIRECTORIES,
+  path: string
 ): boolean {
-    return isPathInDirectory(directory, path);
+  return isPathInDirectory(directory, path);
 }
 
 // Export error types for error handling
-export { JSONFileError, PathError }; 
+export { JSONFileError, PathError };
