@@ -1,8 +1,8 @@
 import { constants } from 'node:fs';
-import { access, mkdir } from 'node:fs/promises';
-import { BASE_DIR, DIRECTORIES } from '../config';
-import { ensureDirectory as ensureDirectoryFromPaths } from './paths';
+import { access } from 'node:fs/promises';
+import { DIRECTORIES } from '../config';
 import { log } from '../services/logging';
+import { ensureDirectory as ensureDirectoryFromPaths } from './paths';
 
 /**
  * Check if a directory exists
@@ -34,7 +34,7 @@ export const ensureDirectory = ensureDirectoryFromPaths;
 export async function ensureDirectoryStructure(): Promise<void> {
   try {
     // First ensure base directory exists
-    await ensureDirectory(BASE_DIR);
+    await ensureDirectory(DIRECTORIES.BASE);
 
     // Create each directory in the DIRECTORIES config
     const directories = Object.values(DIRECTORIES);

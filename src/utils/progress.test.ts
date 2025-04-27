@@ -10,7 +10,7 @@ describe('Progress Reporting', () => {
   beforeEach(async () => {
     // Clean up any existing checkpoint file
     try {
-      await rm(CHECKPOINT_CONFIG.FULL_PATH);
+      await rm(CHECKPOINT_CONFIG.FILE);
     } catch {
       // Ignore if file doesn't exist
     }
@@ -21,7 +21,7 @@ describe('Progress Reporting', () => {
   afterEach(async () => {
     // Clean up after tests
     try {
-      await rm(CHECKPOINT_CONFIG.FULL_PATH);
+      await rm(CHECKPOINT_CONFIG.FILE);
     } catch {
       // Ignore if file doesn't exist
     }

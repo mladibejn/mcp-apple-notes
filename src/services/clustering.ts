@@ -1,14 +1,14 @@
 import path from 'node:path';
+import { DBSCAN } from 'density-clustering';
+import { kmeans as kmeansCluster } from 'ml-kmeans';
 import { DIRECTORIES } from '../config';
-import type { EnrichedNote } from '../types';
+import type { EnrichedNote, Logger } from '../types';
 import type { CheckpointManager } from '../utils/checkpoint';
 import { ProcessingStage } from '../utils/checkpoint';
 import { readJSON, writeJSON } from '../utils/json';
-import type { Logger } from '../utils/logger';
 import { fileExists } from '../utils/paths';
 import { ensureDirectory } from '../utils/paths';
-import { kmeans as kmeansCluster } from 'ml-kmeans';
-import { DBSCAN } from 'density-clustering';
+import { log } from './logging';
 
 interface PreparedData {
   embeddings: number[][];
@@ -57,11 +57,9 @@ interface ClusteringOutput {
 
 export class ClusteringService {
   private checkpointManager: CheckpointManager;
-  private logger: Logger;
 
-  constructor(checkpointManager: CheckpointManager, logger: Logger) {
+  constructor(checkpointManager: CheckpointManager) {
     this.checkpointManager = checkpointManager;
-    this.logger = logger;
   }
 
   /**
@@ -93,7 +91,9 @@ export class ClusteringService {
 
           // Validate embedding
           if (!note.embedding || !Array.isArray(note.embedding) || note.embedding.length === 0) {
-            this.logger.warn(`Note ${nextNoteId} has invalid embedding, skipping`);
+            log('clustering.warn', {
+              message: `Note ${nextNoteId} has invalid embedding, skipping`,
+            });
             skippedNotes++;
             continue;
           }
@@ -112,7 +112,9 @@ export class ClusteringService {
         } catch (error) {
           // Log error and mark note as failed in checkpoint
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Failed to process note ${nextNoteId}:`, errorMessage);
+          log('clustering.error', {
+            message: `Failed to process note ${nextNoteId}: ${errorMessage}`,
+          });
           await this.checkpointManager.updateNoteProgress(
             ProcessingStage.CLUSTERING,
             nextNoteId,
@@ -122,7 +124,9 @@ export class ClusteringService {
       }
 
       if (skippedNotes > 0) {
-        this.logger.warn(`Skipped ${skippedNotes} notes due to invalid embeddings`);
+        log('clustering.warn', {
+          message: `Skipped ${skippedNotes} notes due to invalid embeddings`,
+        });
       }
 
       if (embeddings.length === 0) {
@@ -138,11 +142,15 @@ export class ClusteringService {
         );
       }
 
-      this.logger.info(`Successfully loaded ${embeddings.length} notes for clustering`);
+      log('clustering.success', {
+        message: `Successfully loaded ${embeddings.length} notes for clustering`,
+      });
       return { embeddings, noteIds, notes };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to load notes for clustering:', errorMessage);
+      log('clustering.error', {
+        message: `Failed to load notes for clustering: ${errorMessage}`,
+      });
       throw error;
     }
   }
@@ -168,9 +176,9 @@ export class ClusteringService {
       }
     }
 
-    this.logger.info(
-      `Determined optimal number of clusters: ${optimalClusters} (silhouette score: ${bestScore.toFixed(3)})`
-    );
+    log('clustering.info', {
+      message: `Determined optimal number of clusters: ${optimalClusters} (silhouette score: ${bestScore.toFixed(3)})`,
+    });
     return optimalClusters;
   }
 
@@ -212,7 +220,7 @@ export class ClusteringService {
         // Convert clusters to cluster IDs array
         const clusterIds = new Array(embeddings.length).fill(-1);
         clusters.forEach((cluster, i) => {
-          cluster.forEach(pointIndex => {
+          cluster.forEach((pointIndex) => {
             clusterIds[pointIndex] = i;
           });
         });
@@ -226,7 +234,9 @@ export class ClusteringService {
       throw new Error(`Unsupported clustering algorithm: ${options.algorithm}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Clustering failed: ${errorMessage}`);
+      log('clustering.error', {
+        message: `Clustering failed: ${errorMessage}`,
+      });
       throw error;
     }
   }
@@ -234,7 +244,10 @@ export class ClusteringService {
   /**
    * Calculate silhouette score for clustering results
    */
-  private async calculateSilhouetteScore(embeddings: number[][], clusterIds: number[]): Promise<number> {
+  private async calculateSilhouetteScore(
+    embeddings: number[][],
+    clusterIds: number[]
+  ): Promise<number> {
     let totalScore = 0;
     let validPoints = 0;
 
@@ -257,7 +270,9 @@ export class ClusteringService {
       for (const otherClusterId of uniqueClusters) {
         if (otherClusterId === clusterId) continue;
 
-        const otherClusterPoints = embeddings.filter((_, idx) => clusterIds[idx] === otherClusterId);
+        const otherClusterPoints = embeddings.filter(
+          (_, idx) => clusterIds[idx] === otherClusterId
+        );
         if (otherClusterPoints.length === 0) continue;
 
         let clusterDist = 0;
@@ -300,7 +315,7 @@ export class ClusteringService {
 
     // Sort distances and find the knee point
     distances.sort((a, b) => a - b);
-    const kNeighborIndex = Math.floor(embeddings.length * minPts / 100);
+    const kNeighborIndex = Math.floor((embeddings.length * minPts) / 100);
     return distances[kNeighborIndex];
   }
 
@@ -380,8 +395,8 @@ export class ClusteringService {
         }
       }
 
-      const clusters = {};
-      const noteAssignments = {};
+      const clusters: { [clusterId: string]: ClusterMetadata } = {};
+      const noteAssignments: { [noteId: string]: string } = {};
 
       for (const [rawClusterId, clusterNotes] of notesByCluster.entries()) {
         const clusterId = rawClusterId.toString();
@@ -437,10 +452,14 @@ export class ClusteringService {
       };
 
       await writeJSON(output, path.join(DIRECTORIES.CLUSTERS, 'clusters.json'));
-      this.logger.info(`Saved clustering results with ${output.totalClusters} clusters`);
+      log('clustering.info', {
+        message: `Saved clustering results with ${output.totalClusters} clusters`,
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to save clustering results:', errorMessage);
+      log('clustering.error', {
+        message: `Failed to save clustering results: ${errorMessage}`,
+      });
       throw error;
     }
   }

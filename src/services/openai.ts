@@ -38,11 +38,11 @@ export class OpenAIService {
   private lastCompletionTime: number;
   private lastEmbeddingTime: number;
 
-  constructor(config: OpenAIConfig) {
-    this.client = new OpenAI({ apiKey: config.apiKey });
-    this.summaryModel = config.summaryModel || 'gpt-3.5-turbo';
-    this.embeddingModel = config.embeddingModel || 'text-embedding-ada-002';
-    this.maxRetries = config.maxRetries || RETRY_CONFIG.MAX_RETRIES;
+  constructor() {
+    this.client = new OpenAI({ apiKey: config.OPENAI_CONFIG.API_KEY });
+    this.summaryModel = config.OPENAI_CONFIG.SUMMARY_MODEL;
+    this.embeddingModel = config.OPENAI_CONFIG.EMBEDDING_MODEL;
+    this.maxRetries = config.OPENAI_CONFIG.RETRY_CONFIG.MAX_RETRIES;
     this.completionsTokens = 0;
     this.embeddingsTokens = 0;
     this.lastCompletionTime = 0;
@@ -55,7 +55,7 @@ export class OpenAIService {
 
   private async handleRateLimit(type: 'COMPLETIONS' | 'EMBEDDINGS', tokens: number): Promise<void> {
     const now = Date.now();
-    const limits = RATE_LIMITS[type];
+    const limits = config.OPENAI_CONFIG.RATE_LIMITS[type];
     const lastTime = type === 'COMPLETIONS' ? this.lastCompletionTime : this.lastEmbeddingTime;
     const tokenCount = type === 'COMPLETIONS' ? this.completionsTokens : this.embeddingsTokens;
 
@@ -101,8 +101,9 @@ export class OpenAIService {
       }
 
       const delay = Math.min(
-        RETRY_CONFIG.INITIAL_RETRY_DELAY * RETRY_CONFIG.BACKOFF_FACTOR ** retryCount,
-        RETRY_CONFIG.MAX_RETRY_DELAY
+        config.OPENAI_CONFIG.RETRY_CONFIG.INITIAL_RETRY_DELAY *
+          config.OPENAI_CONFIG.RETRY_CONFIG.BACKOFF_FACTOR ** retryCount,
+        config.OPENAI_CONFIG.RETRY_CONFIG.MAX_RETRY_DELAY
       );
 
       await this.sleep(delay);

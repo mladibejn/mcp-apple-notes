@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, readdir, mkdir } from 'node:fs/promises';
+import { access, mkdir, readdir } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { DIRECTORIES, FILE_CONFIG } from '../config';
 import { log } from '../services/logging';
