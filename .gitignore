@@ -26,3 +26,7 @@ node_modules/
 # Task files
 tasks.json
 tasks/ 
+
+data/
+
+.cursor/mcp.json
