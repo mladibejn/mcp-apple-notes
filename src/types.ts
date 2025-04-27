@@ -22,3 +22,11 @@ export interface Logger {
 }
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+/**
+ * Maps note IDs to their assigned cluster IDs
+ * @example { "note1": 0, "note2": 1, "note3": 2 }
+ */
+export type ClusterAssignments = {
+  [noteId: string]: number;
+};

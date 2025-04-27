@@ -60,11 +60,8 @@ export class CheckpointManager {
    */
   async initialize(totalNotes: number): Promise<void> {
     try {
-      // Ensure checkpoint directory exists
-      await ensureDirectory(CHECKPOINT_CONFIG.DIRECTORY);
-
-      if (await fileExists(CHECKPOINT_CONFIG.FULL_PATH)) {
-        this.metadata = await readJSON<CheckpointMetadata>(CHECKPOINT_CONFIG.FULL_PATH);
+      if (await fileExists(CHECKPOINT_CONFIG.FILE)) {
+        this.metadata = await readJSON<CheckpointMetadata>(CHECKPOINT_CONFIG.FILE);
         // Update total notes if it has changed
         if (this.metadata.totalNotes !== totalNotes) {
           this.metadata.totalNotes = totalNotes;
@@ -118,7 +115,7 @@ export class CheckpointManager {
       throw new Error('Checkpoint metadata not initialized');
     }
     this.metadata.lastUpdated = new Date().toISOString();
-    await writeJSON(JSON.parse(JSON.stringify(this.metadata)), CHECKPOINT_CONFIG.FULL_PATH);
+    await writeJSON(JSON.parse(JSON.stringify(this.metadata)), CHECKPOINT_CONFIG.FILE);
   }
 
   /**

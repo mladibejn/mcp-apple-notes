@@ -18,4 +18,4 @@ export function sanitizeHtmlToMarkdown(html: string): string {
     // You can further restrict or allow tags/attributes as needed
   });
   return turndown.turndown(cleanHtml);
-} 
+}

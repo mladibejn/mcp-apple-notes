@@ -5,8 +5,8 @@ import type { CheckpointManager } from '../utils/checkpoint';
 import { ProcessingStage } from '../utils/checkpoint';
 import { ensureDirectory } from '../utils/directory';
 import { readJSON, writeJSON } from '../utils/json';
-import type { Logger } from '../utils/logger';
 import { fileExists } from '../utils/paths';
+import { log } from './logging';
 
 interface TagStats {
   count: number;
@@ -32,11 +32,9 @@ interface TagMetadata {
 
 export class TagAggregationService {
   private checkpointManager: CheckpointManager;
-  private logger: Logger;
 
-  constructor(checkpointManager: CheckpointManager, logger: Logger) {
+  constructor(checkpointManager: CheckpointManager) {
     this.checkpointManager = checkpointManager;
-    this.logger = logger;
   }
 
   /**
@@ -175,7 +173,9 @@ export class TagAggregationService {
         } catch (error) {
           // Log error and mark note as failed in checkpoint
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Failed to process note ${nextNoteId}:`, errorMessage);
+          log('tagAggregation.failed', {
+            message: `Failed to process note ${nextNoteId}: ${errorMessage}`,
+          });
           await this.checkpointManager.updateNoteProgress(
             ProcessingStage.CLUSTERING,
             nextNoteId,
@@ -218,7 +218,7 @@ export class TagAggregationService {
       // Complete the clustering stage
       await this.checkpointManager.completeStage(ProcessingStage.CLUSTERING);
 
-      this.logger.info('Tag aggregation completed successfully', {
+      log('tagAggregation.completed', {
         totalNotes,
         uniqueTags,
         averageTagsPerNote: metadata.averageTagsPerNote,

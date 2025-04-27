@@ -10,7 +10,7 @@ describe('CheckpointManager', () => {
   beforeEach(async () => {
     // Clean up any existing checkpoint file
     try {
-      await rm(CHECKPOINT_CONFIG.FULL_PATH);
+      await rm(CHECKPOINT_CONFIG.FILE);
     } catch {
       // Ignore if file doesn't exist
     }
@@ -20,7 +20,7 @@ describe('CheckpointManager', () => {
   afterEach(async () => {
     // Clean up after tests
     try {
-      await rm(CHECKPOINT_CONFIG.FULL_PATH);
+      await rm(CHECKPOINT_CONFIG.FILE);
     } catch {
       // Ignore if file doesn't exist
     }
@@ -130,7 +130,7 @@ describe('CheckpointManager', () => {
 
   test('should handle file operations correctly', async () => {
     await checkpointManager.initialize(1);
-    expect(await fileExists(CHECKPOINT_CONFIG.FULL_PATH)).toBe(true);
+    expect(await fileExists(CHECKPOINT_CONFIG.FILE)).toBe(true);
 
     // Modify and check if file is updated
     await checkpointManager.startStage(ProcessingStage.RAW_EXPORT);
